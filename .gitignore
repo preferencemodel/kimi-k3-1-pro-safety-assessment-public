@@ -4,3 +4,5 @@ __pycache__/
 logs/
 external/
 .env
+config/evals.local.yaml
+logs_release/

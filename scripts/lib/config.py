@@ -1,10 +1,15 @@
 """Loader for config/evals.yaml: targets, judges, the judge ensemble and per-eval settings.
 
     from scripts.lib import config      (or: sys.path.insert(0, "scripts/lib"); import config)
+
+Local overrides: if `config/evals.local.yaml` exists (git ignores it), or `KIMI_EVAL_CONFIG` names another YAML file,
+it is merged over config/evals.yaml: mappings merge key by key, and any other value (a list, a string) replaces the
+one in evals.yaml. Use it to point models at your own endpoints instead of editing the tracked file.
 """
 
 from __future__ import annotations
 
+import os
 import re
 from functools import lru_cache
 from pathlib import Path
@@ -14,13 +19,34 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG_PATH = ROOT / "config" / "evals.yaml"
+LOCAL_PATH = ROOT / "config" / "evals.local.yaml"
+
+
+def _merge(base: Any, over: Any) -> Any:
+    """`over` merged into `base`: mappings key by key, any other value replaced."""
+    if isinstance(base, dict) and isinstance(over, dict):
+        return {**base, **{k: _merge(base.get(k), v) for k, v in over.items()}}
+    return over
+
+
+def local_override_path() -> Path | None:
+    """The local override in use: KIMI_EVAL_CONFIG if set, else config/evals.local.yaml if it exists."""
+    env = os.environ.get("KIMI_EVAL_CONFIG")
+    if env:
+        return Path(env)
+    return LOCAL_PATH if LOCAL_PATH.exists() else None
 
 
 @lru_cache(maxsize=1)
 def load(path: str | None = None) -> dict[str, Any]:
-    """config/evals.yaml (or `path`) as a dict, read once per process."""
+    """config/evals.yaml (or `path`) with the local override merged in, read once per process."""
     with open(path or CONFIG_PATH) as f:
-        return yaml.safe_load(f)
+        cfg = yaml.safe_load(f)
+    over = local_override_path()
+    if over is not None:
+        with open(over) as f:
+            cfg = _merge(cfg, yaml.safe_load(f) or {})
+    return cfg
 
 
 def get(dotted: str) -> Any:

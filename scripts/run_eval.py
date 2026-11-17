@@ -119,6 +119,9 @@ def main(argv: list[str] | None = None) -> int:
     e = config.eval_cfg(a.eval_id)
     if not a.model and e.get("model") != "none/none":
         ap.error("--model is required")
+    over = config.local_override_path()
+    if over is not None:
+        print(f"# config: config/evals.yaml with local override {over}", flush=True)
     rc = 0
     for cmd, env in commands(a.eval_id, a.model or "none/none", a.variant, a.limit, a.no_ensemble, a.log_dir, extra):
         print(" ".join(f"{k}={shlex.quote(v)}" for k, v in env.items()) + (" " if env else "") + shlex.join(cmd), flush=True)
